@@ -850,6 +850,103 @@ class TextInputDlg(wx.Dialog):
     def OnCancel(self, event = None):
         self.EndModal(wx.ID_CANCEL)
 
+# Ask user a password (with optional confirmation)
+class PasswordInputDlg(wx.Dialog):
+    def __init__(self, parent, text, title, validateFunc = None, confirm = False):
+        wx.Dialog.__init__(self, parent, -1, title,
+                           style = wx.DEFAULT_DIALOG_STYLE | wx.WANTS_CHARS,
+                           size = (300,-1))
+
+        # function to call to validate the input string on OK. can be
+        # None, in which case it is not called. if it returns "", the
+        # input is valid, otherwise the string it returns is displayed in
+        # a message box and the dialog is not closed.
+        self.validateFunc = validateFunc
+        self.confirm = confirm
+
+        vsizer = wx.BoxSizer(wx.VERTICAL)
+        msgtext = wx.StaticText(self, -1, text,size=(-1, -1))
+        msgtext.Wrap(275)
+        vsizer.Add(msgtext, 1, wx.EXPAND | wx.BOTTOM, 10)
+
+        self.tc = wx.TextCtrl(self, -1, style = wx.TE_PASSWORD, size=(175, -1))
+        vsizer.Add(wx.StaticText(self, -1, "Password"))
+        vsizer.Add(self.tc, 0, wx.BOTTOM, 5);
+
+        if confirm:
+            self.tc2 = wx.TextCtrl(self, -1, style = wx.TE_PASSWORD, size=(175, -1))
+            vsizer.Add(wx.StaticText(self, -1, "Repeat:"))
+            vsizer.Add(self.tc2);
+
+        vsizer.Add(wx.StaticLine(self, -1), 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 5)
+
+        hsizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        cancelBtn = gutil.createStockButton(self, "Cancel")
+        hsizer.Add(cancelBtn)
+
+        okBtn = gutil.createStockButton(self, "OK")
+        hsizer.Add(okBtn, 0, wx.LEFT, 10)
+
+        vsizer.Add(hsizer, 0, wx.EXPAND | wx.TOP, 5)
+
+        util.finishWindow(self, vsizer)
+
+        wx.EVT_BUTTON(self, cancelBtn.GetId(), self.OnCancel)
+        wx.EVT_BUTTON(self, okBtn.GetId(), self.OnOK)
+
+        wx.EVT_TEXT_ENTER(self, self.tc.GetId(), self.OnOK)
+
+        wx.EVT_CHAR(self.tc, self.OnCharEntry)
+        if confirm:
+            wx.EVT_CHAR(self.tc2, self.OnCharEntry)
+        wx.EVT_CHAR(cancelBtn, self.OnCharButton)
+        wx.EVT_CHAR(okBtn, self.OnCharButton)
+
+        self.tc.SetFocus()
+
+    def SetValue(self, value):
+        self.tc.SetValue(value)
+
+    def OnCharEntry(self, event):
+        self.OnChar(event, True)
+
+    def OnCharButton(self, event):
+        self.OnChar(event, False)
+
+    def OnChar(self, event, isEntry):
+        kc = event.GetKeyCode()
+
+        if kc == wx.WXK_ESCAPE:
+            self.OnCancel()
+
+        elif (kc == wx.WXK_RETURN) and isEntry:
+                self.OnOK()
+
+        else:
+            event.Skip()
+
+    def OnOK(self, event = None):
+        self.input = fromGUI(self.tc.GetValue())
+        if self.confirm:
+            self.input2 = fromGUI(self.tc2.GetValue())
+            if self.input != self.input2:
+                wx.MessageBox("Passwords do not match!", "Error", wx.OK, self)
+                return
+
+        if self.validateFunc:
+            msg = self.validateFunc(self.input)
+
+            if msg:
+                wx.MessageBox(msg, "Error", wx.OK, self)
+                return
+
+        self.EndModal(wx.ID_OK)
+
+    def OnCancel(self, event = None):
+        self.EndModal(wx.ID_CANCEL)
+
+
 # asks the user for a keypress and stores it.
 class KeyDlg(wx.Dialog):
     def __init__(self, parent, cmdName):

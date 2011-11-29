@@ -26,6 +26,7 @@ import error
 import headers
 import locations
 import mypager
+import myencrypt
 import pdf
 import pml
 import spellcheck
@@ -56,6 +57,10 @@ class Screenplay:
         # cursor position: line and column
         self.line = 0
         self.column = 0
+
+        self.encrypted = False
+        self.enckey = ""
+        self.randomsalt = myencrypt.randomsalt()
 
         # first line shown on screen. use getTopLine/setTopLine to access
         # this.

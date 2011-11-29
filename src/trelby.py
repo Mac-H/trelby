@@ -17,6 +17,7 @@ import locationsdlg
 import misc
 import myimport
 import mypickle
+import myencrypt
 import namesdlg
 import opts
 import pml
@@ -270,16 +271,26 @@ class MyCtrl(wx.Control):
         return cfgGui
 
     def loadFile(self, fileName):
-        s = util.loadFile(fileName, mainFrame)
-        if s == None:
-            return
+        encrypted = False
+        if fileName[-7:] == "trelbyx":
+            retval = myencrypt.decryptFile(fileName, mainFrame)
+            if retval == None:
+                # could not load file. return.
+                return
+            s, key, randomsalt = retval
+            encrypted = True
+        else:
+            s = util.loadFile(fileName, mainFrame)
 
         try:
             (sp, msg) = screenplay.Screenplay.load(s, cfgGl)
+            if encrypted:
+                sp.encrypted = True
+                sp.enckey = key
+                sp.randomsalt = randomsalt
         except TrelbyError, e:
             wx.MessageBox("Error loading file:\n\n%s" % e, "Error",
-                          wx.OK, mainFrame)
-
+                  wx.OK, mainFrame)
             return
 
         if msg:
@@ -295,11 +306,32 @@ class MyCtrl(wx.Control):
         self.makeLineVisible(self.sp.line)
 
     # save script to given filename. returns True on success.
-    def saveFile(self, fileName):
-        if util.writeToFile(fileName, self.sp.save(), mainFrame):
+    def saveFile(self, fileName, encrypted=False):
+        sptext = self.sp.save()
+        randomsalt = self.sp.randomsalt
+
+        if self.sp.encrypted == True:
+            # An alredy encrypted file, being saved.
+            key = self.sp.enckey
+            filetext = myencrypt.encryptScreenplay(sptext, randomsalt, key)
+        elif encrypted == True:
+            # File not currenty encrypted, but requested
+            pwdlg = misc.PasswordInputDlg(self, "Passwords cannot be empty or only whitespaces. Be sure to select a strong password, and one you wont forget. This password will be the only way to open the file.", "Enter Password", confirm = True)
+            if pwdlg.ShowModal() == wx.ID_OK:
+                password = pwdlg.input
+                key = myencrypt.getKeyFromPassword(password, randomsalt)
+                self.sp.enckey = key
+                self.sp.encrypted = True
+            else:
+                return False
+            filetext = myencrypt.encryptScreenplay(sptext, randomsalt, key)
+        else:
+            # No encryption
+            filetext = sptext
+
+        if util.writeToFile(fileName, filetext, mainFrame):
             self.setFile(fileName)
             self.sp.markChanged(False)
-
             return True
         else:
             return False
@@ -1035,7 +1067,7 @@ class MyCtrl(wx.Control):
             dFile = os.path.basename(self.fileName)
         else:
             dDir = misc.scriptDir
-            dFile = u""
+            dFile = u"script.trelby"
 
         dlg = wx.FileDialog(mainFrame, "Filename to save as",
             defaultDir = dDir,
@@ -1043,8 +1075,35 @@ class MyCtrl(wx.Control):
             wildcard = "Trelby files (*.trelby)|*.trelby|All files|*",
             style = wx.SAVE | wx.OVERWRITE_PROMPT)
         if dlg.ShowModal() == wx.ID_OK:
-            if self.saveFile(dlg.GetPath()):
-                gd.mru.add(dlg.GetPath())
+            filepth=dlg.GetPath()
+            if len(filepth) < 7 or filepth[-7:] != ".trelby":
+                filepth += ".trelby"
+            if self.saveFile(filepth):
+                gd.mru.add(filepth)
+
+        dlg.Destroy()
+
+    def OnSaveEncAs(self):
+        if self.fileName:
+            dDir = os.path.dirname(self.fileName)
+            dFile = os.path.basename(self.fileName)
+            if len(dFile)<6 or  dFile[-6:] == "trelby":
+                dFile += "x"
+        else:
+            dDir = misc.scriptDir
+            dFile = u"script.trelbyx"
+
+        dlg = wx.FileDialog(mainFrame, "Encrypted filename to save as",
+            defaultDir = dDir,
+            defaultFile = dFile,
+            wildcard = "Trelby Encrypted file (*.trelbyx)|*.trelbyx",
+            style = wx.SAVE | wx.OVERWRITE_PROMPT)
+        if dlg.ShowModal() == wx.ID_OK:
+            filepth=dlg.GetPath()
+            if len(filepth) < 7 or filepth[-7:] != "trelbyx":
+                filepth += ".trelbyx"
+            if self.saveFile(filepth, encrypted=True):
+                gd.mru.add(filepth)
 
         dlg.Destroy()
 
@@ -1545,6 +1604,7 @@ class MyFrame(wx.Frame):
         fileMenu.Append(ID_FILE_OPEN, "&Open...\tCTRL-O")
         fileMenu.Append(ID_FILE_SAVE, "&Save\tCTRL-S")
         fileMenu.Append(ID_FILE_SAVE_AS, "Save &As...")
+        fileMenu.Append(ID_FILE_SAVE_ENC_AS, "Sa&ve Encrypted...")
         fileMenu.Append(ID_FILE_CLOSE, "&Close\tCTRL-W")
         fileMenu.Append(ID_FILE_REVERT, "&Revert")
         fileMenu.AppendSeparator()
@@ -1720,7 +1780,7 @@ class MyFrame(wx.Frame):
         vsizer.Add(wx.StaticLine(self, -1), 0, wx.EXPAND)
 
 
-        gd.mru.useMenu(fileMenu, 14)
+        gd.mru.useMenu(fileMenu, 15)
 
         wx.EVT_MENU_HIGHLIGHT_ALL(self, self.OnMenuHighlight)
 
@@ -1742,6 +1802,7 @@ class MyFrame(wx.Frame):
         wx.EVT_MENU(self, ID_FILE_OPEN, self.OnOpen)
         wx.EVT_MENU(self, ID_FILE_SAVE, self.OnSave)
         wx.EVT_MENU(self, ID_FILE_SAVE_AS, self.OnSaveScriptAs)
+        wx.EVT_MENU(self, ID_FILE_SAVE_ENC_AS, self.OnSaveEncAs)
         wx.EVT_MENU(self, ID_FILE_IMPORT, self.OnImportScript)
         wx.EVT_MENU(self, ID_FILE_EXPORT, self.OnExportScript)
         wx.EVT_MENU(self, ID_FILE_CLOSE, self.OnCloseScript)
@@ -1848,6 +1909,7 @@ class MyFrame(wx.Frame):
             "ID_FILE_REVERT",
             "ID_FILE_SAVE",
             "ID_FILE_SAVE_AS",
+            "ID_FILE_SAVE_ENC_AS",
             "ID_FILE_SETTINGS",
             "ID_HELP_ABOUT",
             "ID_HELP_COMMANDS",
@@ -1936,7 +1998,16 @@ class MyFrame(wx.Frame):
             # we just strip out ".trelby" if it's found anywhere in the
             # string)
 
-            s = text.replace(".trelby", "")
+            pos = text.find(u".trelbyx")
+            if pos != -1:
+                s = text[0:pos] + text[pos + 8:]
+            else:
+                pos = text.find(u".trelby")
+                if pos != -1:
+                    s = text[0:pos] + text[pos + 7:]
+                else:
+                    s = text
+
             self.tabCtrl.setTabText(i, s)
 
     # iterates over all tabs and finds out the corresponding page number
@@ -2026,7 +2097,7 @@ class MyFrame(wx.Frame):
     def OnOpen(self, event = None):
         dlg = wx.FileDialog(self, "File to open",
             misc.scriptDir,
-            wildcard = "Trelby files (*.trelby)|*.trelby|All files|*",
+            wildcard = "Trelby files (*.trelby;*.trelbyx)|*.trelby;*.trelbyx|All files|*",
             style = wx.OPEN)
 
         if dlg.ShowModal() == wx.ID_OK:
@@ -2037,6 +2108,9 @@ class MyFrame(wx.Frame):
 
     def OnSave(self, event = None):
         self.panel.ctrl.OnSave()
+
+    def OnSaveEncAs(self, event = None):
+        self.panel.ctrl.OnSaveEncAs()
 
     def OnSaveScriptAs(self, event = None):
         self.panel.ctrl.OnSaveScriptAs()

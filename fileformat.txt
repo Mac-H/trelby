@@ -234,3 +234,53 @@ increasing the fileformat version number, so unknown line types should be
 converted to Action, and a warning given to user about this.
 
 See sample.trelby for an example screenplay.
+
+ENCRYPTION
+-------
+
+An encrypted file is simply a file formatted as above, passed through a wrapper function, which encrypts the data using AES256 encryption algorithm in CFB mode.
+
+For the encryption function, we define and use the following:
+
+PROGID : A 8 byte constant/magic number defined for us ("79184SLT").
+salt: PROGID + 8-byte random hexstring (32 bits entropy).
+
+KEY : (salt + user input text), run through SHA256,
+      to generate the 32 byte/256 bit key.
+IV  : initialization vector = 16 bytes. we use salt.
+
+The screenplay fileformat text is the Basic plaintext. This is padded to nearest 16 ceiling with space characters (" "). So a 17 byte string, would be padded with 15 spaces. A 16 byte string would be padded with 16 (and not 0) spaces.
+
+Finally, a 16 byte string which is the string form of the length of the actual plaintext is appended. So if the plaintext was 3045 bytes in length, the string appended is "            3045".
+
+Total plaintext = Basic plaintext + padding to nearest 16 + 16 byte length string
+
+Thus the length of the plaintext may increase by upto 17 - 32 bytes.
+
+CIPHERTEXT: Total plaintext is passed to AES256 with KEY and IV, to obtain ciphertext.
+
+Integrity hashes. We calculate the following
+
+Key integrity hash = first 8 bytes of SHA256(salt + key)
+Screenplay integrity hash = 32 bytes SHA256(salt + Basic plaintext)
+
+The end file consists of:
+- HEADER (56 bytes)
+   - Salt (16 bytes)
+      - PROGID (8 bytes)
+      - Random salt (8 bytes)
+   - Integrity hash (40 bytes)
+      - Key integrity hash (8 bytes)
+      - Screenplay integrity hash (32 bytes)
+- CIPHERTEXT (variable length)
+
+
+DECRYPTION
+---------
+
+This is the reverse of encryption. We split the header to individual parts.
+ - Ask user for key
+  - check key against key integrity hash to see it matches.
+ - Decrypt the ciphertext with the key and IV (Salt)
+  - check the decrypted text with screenplay integrity hash.
+
