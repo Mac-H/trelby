@@ -68,6 +68,7 @@ def importFDX(fileName, frame):
 
             s = util.toLatin1(s)
 
+            s = s.replace("\n","")
             lines.append(screenplay.Line(screenplay.LB_LAST, lt, s))
 
         if len(lines) == 0:
