@@ -39,6 +39,8 @@ import re
 import sys
 import time
 
+from lxml import etree
+
 # screenplay
 class Screenplay:
     def __init__(self, cfgGl):
@@ -434,6 +436,62 @@ class Screenplay:
                 output += " " * tcfg.indent + text + "\n"
 
         return str(output)
+
+    def getElementsAsList(self):
+        ls = self.lines
+        eleList = []
+        curLine = ""
+
+        for line in ls:
+            lineType = line.lt
+            lineText = line.text
+
+            if self.cfg.getType(line.lt).export.isCaps:
+                lineText = util.upper(lineText)
+
+            curLine = curLine + lineText
+
+            if line.lb == LB_LAST:
+                eleList.append((lineType, curLine))
+                curLine = ""
+            elif line.lb == LB_SPACE:
+                curLine += " "
+
+        return eleList
+
+    def generateFDX(self):
+        eleList = self.getElementsAsList()
+        fd = etree.Element("FinalDraft")
+        fd.set("DocumentType","Script")
+        fd.set("Template","No")
+        fd.set("Version","1")
+        content = etree.SubElement(fd,"Content")
+
+        xmlMap = {
+            ACTION : "Action",
+            CHARACTER : "Character",
+            DIALOGUE : "Dialogue",
+            PAREN : "Parenthetical",
+            SCENE : "Scene Heading",
+            SHOT : "Shot",
+            TRANSITION : "Transition",
+            NOTE : "Action",
+        }
+
+        for ele in eleList:
+            typ, txt = ele
+            if typ == NOTE:
+                txt = "[ NOTE : " + ele[1] + "]"
+            para = etree.SubElement(content, "Paragraph")
+            para.set("Type",xmlMap[typ])
+            paratxt = etree.SubElement(para, "Text")
+            paratxt.text = txt
+
+        return etree.tostring(fd, xml_declaration=True,
+                encoding='UTF-8',pretty_print=True)
+
+
+
 
     # generate RTF and return it as a string.
     def generateRTF(self):
