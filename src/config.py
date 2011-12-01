@@ -938,6 +938,9 @@ class ConfigGlobal:
         # whether to open scripts on their last saved position
         v.addBool("honorSavedPos", True, "OpenScriptOnSavedPos")
 
+        # whether to use emacs like scrolling
+        v.addBool("legacyScroll", False, "LegacyScrolling")
+
         # page break indicators to show
         v.addInt("pbi", PBI_REAL, "PageBreakIndicators", PBI_FIRST,
                     PBI_LAST)

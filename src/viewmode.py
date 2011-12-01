@@ -5,6 +5,10 @@ import util
 
 import wx
 
+DIRECTION_UP = 0
+DIRECTION_DOWN = 1
+DIRECTION_CENTER = 2
+
 # a piece of text on screen.
 class TextString:
     def __init__(self, line, text, x, y, fi, isUnderlined):
@@ -96,7 +100,7 @@ class ViewMode:
 
     # make line, which is not currently visible, visible. texts =
     # self.getScreen(ctrl, False)[0].
-    def makeLineVisible(self, ctrl, line, texts):
+    def makeLineVisible(self, ctrl, line, texts, direction = DIRECTION_CENTER):
         raise "makeLineVisible not implemented"
 
     # handle page up (dir == -1) or page down (dir == 1) command. cursor
@@ -130,10 +134,20 @@ class ViewMode:
         return (line, column)
 
     # semi-generic implementation, for use by Draft and Layout modes.
-    def makeLineVisibleGeneric(self, ctrl, line, texts):
-        ctrl.sp.setTopLine(max(0, int(line - (len(texts) * 0.5))))
+    def makeLineVisibleGeneric(self, ctrl, line, texts, direction = DIRECTION_CENTER, jumpahead= 3):
+        curtopline = ctrl.sp.getTopLine()
+        if ctrl.sp.cfgGl.legacyScroll or direction == DIRECTION_CENTER:
+            ctrl.sp.setTopLine(max(0, int(line - (len(texts) * 0.5))))
+            if not ctrl.isLineVisible(line):
+                ctrl.sp.setTopLine(line)
 
-        if not ctrl.isLineVisible(line):
+        elif direction == DIRECTION_UP:
+            if not ctrl.isLineVisible(line) and ctrl.isLineVisible(line-1):
+                i = jumpahead
+                while not ctrl.isLineVisible(line):
+                    ctrl.sp.setTopLine(curtopline+i)
+                    i += jumpahead
+        else: #set the top line
             ctrl.sp.setTopLine(line)
 
     # semi-generic implementation, for use by Draft and Layout modes.
@@ -228,8 +242,8 @@ class ViewModeDraft(ViewMode):
     def pos2linecol(self, ctrl, x, y):
         return self.pos2linecolGeneric(ctrl, x, y)
 
-    def makeLineVisible(self, ctrl, line, texts):
-        self.makeLineVisibleGeneric(ctrl, line, texts)
+    def makeLineVisible(self, ctrl, line, texts, direction = DIRECTION_CENTER):
+        self.makeLineVisibleGeneric(ctrl, line, texts, direction, jumpahead = 1)
 
     def pageCmd(self, ctrl, cs, dir, texts, dpages):
         self.pageCmdGeneric(ctrl, cs, dir, texts, dpages)
@@ -365,8 +379,8 @@ class ViewModeLayout(ViewMode):
     def pos2linecol(self, ctrl, x, y):
         return self.pos2linecolGeneric(ctrl, x, y)
 
-    def makeLineVisible(self, ctrl, line, texts):
-        self.makeLineVisibleGeneric(ctrl, line, texts)
+    def makeLineVisible(self, ctrl, line, texts, direction = DIRECTION_CENTER):
+        self.makeLineVisibleGeneric(ctrl, line, texts, direction, jumpahead = 3)
 
     def pageCmd(self, ctrl, cs, dir, texts, dpages):
         self.pageCmdGeneric(ctrl, cs, dir, texts, dpages)
@@ -486,7 +500,7 @@ class ViewModeSideBySide(ViewMode):
 
         return (line, column)
 
-    def makeLineVisible(self, ctrl, line, texts):
+    def makeLineVisible(self, ctrl, line, texts, direction = DIRECTION_CENTER):
         ctrl.sp.setTopLine(line)
 
     def pageCmd(self, ctrl, cs, dir, texts, dpages):

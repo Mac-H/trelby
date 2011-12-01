@@ -385,13 +385,13 @@ class MyCtrl(wx.Control):
 
         return (line >= texts[0].line) and (line <= texts[-1].line)
 
-    def makeLineVisible(self, line):
+    def makeLineVisible(self, line, direction = viewmode.DIRECTION_CENTER):
         texts = gd.vm.getScreen(self, False)[0]
 
         if self.isLineVisible(line, texts):
             return
 
-        gd.vm.makeLineVisible(self, line, texts)
+        gd.vm.makeLineVisible(self, line, texts, direction)
 
     def adjustScrollBar(self):
         height = self.GetClientSize().height
@@ -1228,13 +1228,18 @@ class MyCtrl(wx.Control):
         else:
             cmd = mainFrame.kbdCommands.get(util.Key(kc,
                 ev.ControlDown(), ev.AltDown(), ev.ShiftDown()).toInt())
-
+            isUp = False
+            isDown = False
             if cmd:
                 if cmd.isMenu:
                     getattr(mainFrame, "On" + cmd.name)()
                     return
                 else:
                     getattr(self, "cmd" + cmd.name)(cs)
+                    if cmd.name == "MoveUp":
+                        isUp = True
+                    elif cmd.name == "MoveDown":
+                        isDown = True
             else:
                 ev.Skip()
                 return
@@ -1250,7 +1255,12 @@ class MyCtrl(wx.Control):
                 cs.needsVisifying = True
 
         if cs.needsVisifying:
-            self.makeLineVisible(self.sp.line)
+            if isDown:
+                self.makeLineVisible(self.sp.line, direction = viewmode.DIRECTION_UP)
+            elif isUp:
+                self.makeLineVisible(self.sp.line, direction = viewmode.DIRECTION_DOWN)
+            else:
+                self.makeLineVisible(self.sp.line, direction = viewmode.DIRECTION_CENTER)
 
         self.updateScreen()
 
